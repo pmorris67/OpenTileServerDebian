@@ -105,8 +105,8 @@ Database name : ${OSM_DB}
 Server name   : ${VHOST}
 Backend       : mod_tile
 PBF URL       : ${PBF_URL}
-PBF FILE      : ${PBF_FILE}
-MOD TILE ZIP  : ${MOD_TILE_ZIP}
+PBF file      : ${PBF_FILE}
+mod_tile ZIP  : ${MOD_TILE_ZIP}
 To change these values, edit the script file
 
 If the values are not correct, break this script (CTRL-C) now or wait 10s to continue
