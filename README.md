@@ -41,6 +41,11 @@ but has the advantage to have many useful features like re-rendering dirty tiles
     -Default mapnik style    
     -Postgres
     -Apache2
+    
+### Isolated network install
+The mod_tile script variant supports specifying a local OSM data file and mod_tile 
+source ZIP file (downloaded from https://github.com/openstreetmap/mod_tile) to allow
+for installation on an isolated network (which has a Debian repository mirror).  
 
 ## Debian version
 Only tested under Debian 9 (stretch), some packages could be missing under other
@@ -63,6 +68,9 @@ Example
 
     ./opentileserver_stache.sh http://download.geofabrik.de/north-america/us/delaware-latest.osm.pbf
     ./opentileserver_mod.sh http://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+
+Example - isolated network
+    ./opentileserver_mod.sh switzerland-latest.osm.pbf mod_tile-master.zip
     
 </code>
 

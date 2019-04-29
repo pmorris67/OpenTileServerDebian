@@ -1,6 +1,10 @@
 #!/bin/bash
-# Version: 0.9.2
-# Date   : 2018-08-28
+# Version: 0.9.3pm
+# Date   : 2019-04-29
+#
+# Forked from https://github.com/lsimediasarl/OpenTileServerDebian to support
+# installation on an isolated network with a Debian mirror. In which case it does
+# not support updates.
 #
 # This script is inspired from https://github.com/AcuGIS/OpenTileServer
 # Also inspired by documentation at https://wiki.debian.org/OSM/tileserver/jessie
@@ -16,16 +20,17 @@
 #
 # The script must be run as root
 #
-# Usage: ./opentileserverd_mod.sh {pbf_url}"
+# Usage: ./opentileserverd_mod.sh {pbf_file} {mod_tile_zip}"
 #
 # Example
-# ./opentileserver_mod.sh http://download.geofabrik.de/north-america/us/delaware-latest.osm.pbf
+# ./opentileserver_mod.sh delaware-latest.osm.pbf master.zip
 # ./opentileserver_mod.sh http://download.geofabrik.de/europe/switzerland-latest.osm.pbf
-# ./opentileserver_mod.sh https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf
+# ./opentileserver_mod.sh https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf master.zip
 #
 # Licence
 #
-#    Copyright (C) 2017 LSI Media Sarl
+#    Original - Copyright (C) 2017 LSI Media Sarl
+#    Isolated network support - Copyright (C) 2018 Philip Morris
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -49,8 +54,8 @@ VHOST=$(hostname -f)
 #-------------------------------------------------------------------------------
 #--- 0. Introduction
 #-------------------------------------------------------------------------------
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 {pbf_url}"; exit 1;
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 {pbf_file} {mod_tile_zip}"; exit 1;
 fi
 
 # Make sure only root can run our script
@@ -58,14 +63,38 @@ if [ "$(id -u)" != "0" ]; then
    echo "This script must be run as root";  exit 1;
 fi
 
-# Internal variables
-PBF_URL=${1}
-PBF_FILE="/home/${OSM_USER}/OpenStreetMap/${PBF_URL##*/}"
-UPDATE_URL="$(echo ${PBF_URL} | sed 's/latest.osm.pbf/updates/')"
-if [[ ${PBF_URL} =~ "planet" ]]; then
-    # For planet file, hard code the update url
-    UPDATE_URL = "https://planet.openstreetmap.org/replication/day"
+# Internal variables - OSM data
+URL_REGEX='(https?|ftp)://'
+if [[ ${1} =~ ${URL_REGEX} ]]; then
+	PBF_URL=${1}
+	PBF_FILE="/home/${OSM_USER}/OpenStreetMap/${PBF_URL##*/}"
+	UPDATE_URL="$(echo ${PBF_URL} | sed 's/latest.osm.pbf/updates/')"
+	if [[ ${PBF_URL} =~ "planet" ]]; then
+	    # For planet file, hard code the update url
+	    UPDATE_URL = "https://planet.openstreetmap.org/replication/day"
+	fi
+else
+	# Reference PBF by absolute file path
+	PBF_URL=""
+	PBF_FILE=$(readlink -e ${1})
+	UPDATE_URL=""
+	if [ ! -f ${PBF_FILE} ]; then
+		echo "PBF data file ${PBF_FILE} does not exist"
+		return 1
+	fi
 fi
+
+# Internal variables - mod_tile source code
+if [ "$#" -eq 2 ]; then
+	MOD_TILE_ZIP=$(readlink -e ${2})
+	if [ ! -f ${MOD_TILE_ZIP} ]; then
+		echo "mod_tile source archive ${MOD_TILE_ZIP} does not exist"
+		exit 1
+	fi
+else
+	MOD_TILE_ZIP=""
+fi
+
 NP=$(grep -c 'model name' /proc/cpuinfo)
 
 cat <<EOF
@@ -76,6 +105,8 @@ Database name : ${OSM_DB}
 Server name   : ${VHOST}
 Backend       : mod_tile
 PBF URL       : ${PBF_URL}
+PBF FILE      : ${PBF_FILE}
+MOD TILE ZIP  : ${MOD_TILE_ZIP}
 To change these values, edit the script file
 
 If the values are not correct, break this script (CTRL-C) now or wait 10s to continue
@@ -119,7 +150,7 @@ apt install -y git build-essential \
 apt clean
 
 # To avoid the label cut between tiles, add the avoid-edges in the default style
-sed -i 's/<Map/<Map\ buffer-size=\"512\"\ /g' /usr/share/openstreetmap-carto/style.xml
+sed -i 's/<Map srs=/<Map\ buffer-size=\"512\" srs=/g' /usr/share/openstreetmap-carto/style.xml
 # This line is not needed for the moment
 #sed -i 's/<ShieldSymbolizer/<ShieldSymbolizer\ avoid-edges=\"true\"\ /g' /usr/share/openstreetmap-carto/style.xml
 
@@ -159,10 +190,14 @@ let C_MEM=$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f4,7 -d' ' | t
 su ${OSM_USER} <<EOF
 mkdir -p /home/${OSM_USER}/OpenStreetMap
 cd /home/${OSM_USER}/OpenStreetMap
-# Download the latest state file first
-wget -O state.txt ${UPDATE_URL}/state.txt
-# Download main data file
-wget ${PBF_URL}
+if [ -n "${UPDATE_URL}" ]; then
+	# Download the latest state file first
+	wget -O state.txt ${UPDATE_URL}/state.txt
+fi
+if [ -n "${PBF_URL}" ]; then
+	# Download main data file
+	wget ${PBF_URL}
+fi
 # Prepare osmosis working dir and config file
 osmosis --read-replication-interval-init workingDirectory=.
 sed -i.save "s|#\?baseUrl=.*|baseUrl=${UPDATE_URL}|" configuration.txt
@@ -172,6 +207,8 @@ osm2pgsql --slim -d ${OSM_DB} -C ${C_MEM} --number-processes ${NP} --hstore -S /
 EOF
 
 # Prepare the daily cron job for data update
+if [ -n "${UPDATE_URL}" ]; then
+
 cat > /etc/cron.daily/osm-update <<EOF
 #!/bin/bash
 # Switch to osm user
@@ -179,21 +216,24 @@ su ${OSM_USER} <<CRONEOF
 cd /home/${OSM_USER}/OpenStreetMap
 while [ \\\$(cat /home/${OSM_USER}/OpenStreetMap/state.txt | grep '^sequenceNumber=') != \\\$(curl -sL ${UPDATE_URL}/state.txt | grep '^sequenceNumber=') ]
 do    
-    echo "--- Updating data (Local: \$(cat /home/${OSM_USER}/OpenStreetMap/state.txt | grep '^sequenceNumber='), Online: \$(curl -sL ${UPDATE_URL}/state.txt | grep '^sequenceNumber='))"
-    osmosis --read-replication-interval --simplify-change --write-xml-change changes.osc.gz
-    # Get available memory just before we call osm2pgsql!
-    let C_MEM=\\\$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f4,7 -d' ' | tr ' ' '+')-200
-    osm2pgsql --append --slim -d ${OSM_DB} -C \\\${C_MEM} --number-processes ${NP} -e15 -o expire.list --hstore changes.osc.gz
-    sleep 2s
-    # If the mod_tile is used, the render_expired command exist and use it to
-    # mark dirty tile (will be re-render again)
-    cat expire.list | render_expired --min-zoom=15 --touch-from=15 >/dev/null
-    sleep 60s
+	echo "--- Updating data (Local: \$(cat /home/${OSM_USER}/OpenStreetMap/state.txt | grep '^sequenceNumber='), Online: \$(curl -sL ${UPDATE_URL}/state.txt | grep '^sequenceNumber='))"
+	osmosis --read-replication-interval --simplify-change --write-xml-change changes.osc.gz
+	# Get available memory just before we call osm2pgsql!
+	let C_MEM=\\\$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f4,7 -d' ' | tr ' ' '+')-200
+	osm2pgsql --append --slim -d ${OSM_DB} -C \\\${C_MEM} --number-processes ${NP} -e15 -o expire.list --hstore changes.osc.gz
+	sleep 2s
+	# If the mod_tile is used, the render_expired command exist and use it to
+	# mark dirty tile (will be re-render again)
+	cat expire.list | render_expired --min-zoom=15 --touch-from=15 >/dev/null
+	sleep 60s
 done
 echo "--- Data is up to date."
 CRONEOF
 EOF
+
 chmod +x /etc/cron.daily/osm-update
+
+fi
 
 #-------------------------------------------------------------------------------
 #--- 5. Configure backend
@@ -204,8 +244,19 @@ echo "===================="
 #---Configure mod_tile and renderd
 echo "Configure mod_tile,renderd and apache"
 
-# Clone and compile mod_tile
-git clone https://github.com/openstreetmap/mod_tile.git
+# Prepare and compile mod_tile
+if [ -n "${MOD_TILE_ZIP}" ]; then
+	# Unzip release downloaded from github and rename folder 
+	rm -fr mod_tile
+	MOD_TILE_EXTDIR=$(mktemp -d)
+	unzip ${MOD_TILE_ZIP} -d ${MOD_TILE_EXTDIR}
+	mv ${MOD_TILE_EXTDIR}/mod_tile* mod_tile
+	rmdir ${MOD_TILE_EXTDIR}
+	unset MOD_TILE_EXTDIR
+else
+	# Clone direct from github
+	git clone https://github.com/openstreetmap/mod_tile.git
+fi
 cd mod_tile
 dpkg-buildpackage -i -b -uc -us
 cd ..
