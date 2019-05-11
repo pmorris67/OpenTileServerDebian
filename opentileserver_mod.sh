@@ -166,7 +166,7 @@ sed -i 's/<Map srs=/<Map\ buffer-size=\"512\" srs=/g' /usr/share/openstreetmap-c
 #-------------------------------------------------------------------------------
 #--- 1a. Post process openstreetmap-carto shapes if we didnt download them
 #-------------------------------------------------------------------------------
-if [ "${ISOLATED}" = "true" ]; then#
+if [ "${ISOLATED}" = "true" ]; then
 	echo "Processing openstreetmap-carto shapefiles"
 	./process-shapefiles.sh
 fi
