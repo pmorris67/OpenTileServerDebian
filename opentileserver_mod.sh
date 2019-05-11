@@ -95,6 +95,14 @@ else
 	MOD_TILE_ZIP=""
 fi
 
+if [ -n "${MOD_TILE_ZIP}" -a -z "${PBF_URL}" ]; then
+	ISOLATED="true"
+	FETCH_SHAPES="false"
+else
+	ISOLATED="false"
+	FETCH_SHAPES="true"
+fi
+
 NP=$(grep -c 'model name' /proc/cpuinfo)
 
 cat <<EOF
@@ -107,6 +115,7 @@ Backend       : mod_tile
 PBF URL       : ${PBF_URL}
 PBF file      : ${PBF_FILE}
 mod_tile ZIP  : ${MOD_TILE_ZIP}
+ISOLATED      : ${ISOLATED}
 To change these values, edit the script file
 
 If the values are not correct, break this script (CTRL-C) now or wait 10s to continue
@@ -140,7 +149,7 @@ apt install --install-recommends -y -q ttf-unifont \
     libjs-leaflet
 #--- prepare the answer for database and automatic download of shape files
 echo "openstreetmap-carto openstreetmap-carto/database-name string ${OSM_DB}" | debconf-set-selections
-echo "openstreetmap-carto-common openstreetmap-carto/fetch-data boolean true" | debconf-set-selections
+echo "openstreetmap-carto-common openstreetmap-carto/fetch-data boolean ${FETCH_SHAPES}" | debconf-set-selections
 apt install -y openstreetmap-carto
 apt install -y git build-essential \
      fakeroot \
@@ -153,6 +162,14 @@ apt clean
 sed -i 's/<Map srs=/<Map\ buffer-size=\"512\" srs=/g' /usr/share/openstreetmap-carto/style.xml
 # This line is not needed for the moment
 #sed -i 's/<ShieldSymbolizer/<ShieldSymbolizer\ avoid-edges=\"true\"\ /g' /usr/share/openstreetmap-carto/style.xml
+
+#-------------------------------------------------------------------------------
+#--- 1a. Post process openstreetmap-carto shapes if we didnt download them
+#-------------------------------------------------------------------------------
+if [ "${ISOLATED}" = "true" ]; then#
+	echo "Processing openstreetmap-carto shapefiles"
+	./process-shapefiles.sh
+fi
 
 #-------------------------------------------------------------------------------
 #--- 2. Create system user
