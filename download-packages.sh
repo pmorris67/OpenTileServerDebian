@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Downloading debian packages"
+
 apt install --download-only --install-recommends -y -q \
 	ttf-unifont \
     fonts-arphic-ukai \
