@@ -146,6 +146,7 @@ apt install --install-recommends -y -q ttf-unifont \
     apache2 \
     libapache2-mod-wsgi \
     javascript-common \
+	libjs-openlayers \
     libjs-leaflet
 #--- prepare the answer for database and automatic download of shape files
 echo "openstreetmap-carto openstreetmap-carto/database-name string ${OSM_DB}" | debconf-set-selections
@@ -325,6 +326,10 @@ DESCRIPTION=This is the standard osm mapnik style
 ;SERVER_ALIAS=https://b.tile.openstreetmap.org
 ;HTCPHOST=proxy.openstreetmap.org
 EOF
+
+# Patch the demo to use the offline files
+ln -s /usr/share/javascript/openlayers /var/www/osm/openlayers
+sed -i 's/http:\/\/openlayers.org\/api/openlayers/' /var/www/osm/slippymap.html
 
 service renderd restart
 
