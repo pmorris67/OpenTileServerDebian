@@ -20,7 +20,7 @@
 #
 # The script must be run as root
 #
-# Usage: ./opentileserverd_mod.sh {pbf_file} {mod_tile_zip}"
+# Usage: ./opentileserver_mod.sh {pbf_file} {mod_tile_zip}"
 #
 # Example
 # ./opentileserver_mod.sh delaware-latest.osm.pbf master.zip
