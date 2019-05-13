@@ -4,7 +4,11 @@
 #
 # Forked from https://github.com/lsimediasarl/OpenTileServerDebian to support
 # installation on an isolated network with a Debian mirror. In which case it does
-# not support updates.
+# not support updates. Use download-mod_tile.sh and download-shapefiles.sh to get
+# dependencies on connected machine. Package them with this script and 
+# process-shapefiles.sh and move them to the off-line machine with the required 
+# PBF file. Use download-packages.sh to help simulate an offline repository by
+# downloading packages first.
 #
 # This script is inspired from https://github.com/AcuGIS/OpenTileServer
 # Also inspired by documentation at https://wiki.debian.org/OSM/tileserver/jessie
